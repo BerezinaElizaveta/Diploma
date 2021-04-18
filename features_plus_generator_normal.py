@@ -216,13 +216,7 @@ class DatasetExpansion:
                 temp_list += [str(int(rnd(self.stat_field_vals[field])))]
         return temp_list
 
-    def delete_dublicates(self, list1, list2):
-        merged_list = list1 + list2
-        list_without_dublicates = set(merged_list)
-        return list(list_without_dublicates)
-
 # start of the anomaly generating block
-
 class RndAnomalyGenerator:
     # statistical characteristics extraction
     def __init__(self, norm_features_recs, norm_features_stats=None):
@@ -340,11 +334,16 @@ if __name__ == '__main__':
     print('file {} was written'.format(normal_csv_file))
 
     normal_generated_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal_generated.csv', json_file)
-    expanded = DatasetExpansion(features, features_list)
-    normals = [expanded.create_normal_record() for _ in range(10)] # 10 - lines to create num
-    for line in normals:
+    exp_generator = DatasetExpansion(features, features_list)
+    generated_normals_list = [exp_generator.create_normal_record() for _ in range(10)] # 10 - lines to create num
+    for line in generated_normals_list:
         print(line)
-    save_to_csv(normal_generated_csv_file, [field_names] + normals)
+    save_to_csv(normal_generated_csv_file, [field_names] + generated_normals_list)
+
+    merged_normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_merged.csv', json_file)
+    merged_list = features_list + generated_normals_list
+    shuffle(merged_list)
+    save_to_csv(merged_normal_csv_file, [field_names] + merged_list)
 
 '''
     anomaly_csv_file = re.sub(r'^(.+)\.json$', r'\1_anomalies.csv', json_file)
