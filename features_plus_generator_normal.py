@@ -164,13 +164,15 @@ class DatasetExpansion:
             norm_features_stats = norm_features_recs.insert_packet_stats()
 
         # for date in utc-format
-        self.last_first_pkt_time = float(norm_features_recs.get_field_val_by_name(norm_features_stats[-1], 'first_pkt_time'))
+        #last_first_pkt_time = float(norm_features_recs.get_field_val_by_name(norm_features_stats[-1], 'first_pkt_time'))
         fst_pkt_times = [float(norm_features_recs.get_field_val_by_name(elem, 'first_pkt_time')) for elem in norm_features_stats]
-        diff_fst_pkt_times = list(map(lambda x: abs(float(x[1]) - float(x[0])), zip(fst_pkt_times, fst_pkt_times[1:])))
+        #diff_fst_pkt_times = list(map(lambda x: abs(float(x[1]) - float(x[0])), zip(fst_pkt_times, fst_pkt_times[1:])))
         durs = [float(norm_features_recs.get_field_val_by_name(elem, 'last_pkt_time')) - float(norm_features_recs.get_field_val_by_name(elem, 'first_pkt_time'))
                 for elem in norm_features_stats]
-        self.diff_fst_pkt_time = {'avg': avg(diff_fst_pkt_times), 'min': min(diff_fst_pkt_times), 'max': max(diff_fst_pkt_times)}
+        #self.diff_fst_pkt_time = {'avg': avg(diff_fst_pkt_times), 'min': min(diff_fst_pkt_times), 'max': max(diff_fst_pkt_times)}
         self.pkt_dur = {'avg': avg(durs), 'min': min(durs), 'max': max(durs)}
+        self.first_time = min(fst_pkt_times)
+        self.last_time = max(fst_pkt_times) + 300
 
         self.src_ips = [(norm_features_recs.get_field_val_by_name(elem, 'src_ip')) for elem in norm_features_stats]
         self.dst_ips = [(norm_features_recs.get_field_val_by_name(elem, 'dst_ip')) for elem in norm_features_stats]
@@ -188,28 +190,24 @@ class DatasetExpansion:
                 field_column = [float(norm_features_recs.get_field_val_by_name(elem, field)) for elem in norm_features_stats]
                 self.stat_field_vals[field] = {'avg': avg(field_column), 'min': min(field_column), 'max': max(field_column), 'stdev': stdev(field_column)}
 
-    def create_datestamp(self, datestamp):
-        ms = ''.join(str(randint(0, 9)) for i in range(6))
-        datestamp += randint(-300, 300)
-        ds = f'{str(datestamp).partition(".")[0]}.{ms}'
-        return float(ds)
-
     def create_normal_record(self):
         temp_list = []
+        first_pkt_time = 0.0
         for field in self.norm_features_recs.get_field_names():
             if field == 'first_pkt_time':
-                self.last_first_pkt_time += abs(rnd(self.diff_fst_pkt_time))
-                self.last_first_pkt_time = self.create_datestamp(self.last_first_pkt_time)# expand time as +- 5 mins
-                temp_list += [str(self.last_first_pkt_time)]
+                ms = ''.join(str(randint(0, 9)) for i in range(6))
+                datestamp = uniform(self.first_time, self.last_time)
+                first_pkt_time = float(f'{str(datestamp).partition(".")[0]}.{ms}')
+                temp_list += [str(datestamp)]
             elif field == 'last_pkt_time':
-                temp_list += [str(self.last_first_pkt_time + abs(rnd(self.pkt_dur)))]
+                temp_list += [str(first_pkt_time + abs(rnd(self.pkt_dur)))]
             elif field == 'src_ip':
                 temp_ip = choice(self.src_ips)
-                new_ip = int(ip_address(temp_ip)) + randint(-5, 5)
+                new_ip = int(ip_address(temp_ip)) + randint(0, 5)
                 temp_list += [str(ip_address(new_ip))]
             elif field == 'dst_ip':
                 temp_ip = choice(self.dst_ips)
-                new_ip = int(ip_address(temp_ip)) + randint(-5, 5)
+                new_ip = int(ip_address(temp_ip)) + randint(0, 5)
                 temp_list += [str(ip_address(new_ip))]
             elif field == 'src_port' or field == 'dst_port':
                 port = choice(list(self.ports_range))
@@ -337,7 +335,7 @@ if __name__ == '__main__':
 
     normal_generated_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal_generated.csv', json_file)
     expanded = DatasetExpansion(features, features_list)
-    normals = [expanded.create_normal_record() for _ in range(10)]
+    normals = [expanded.create_normal_record() for _ in range(10)] # 10 - lines to create num
     for line in normals:
         print(line)
     save_to_csv(normal_generated_csv_file, [field_names] + normals)
