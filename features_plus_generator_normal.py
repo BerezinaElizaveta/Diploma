@@ -155,7 +155,7 @@ def rnd(dict_num):
     return dict_num['avg'] + (uniform(0, dict_num['max'] - dict_num['avg'])
                               if randint(0, 1) == 0 else -uniform(0, dict_num['avg'] - dict_num['min']))
 
-class RndAnomalyGenerator:
+class DatasetExpansion:
     # statistical characteristics extraction
     def __init__(self, norm_features_recs, norm_features_stats=None):
         self.norm_features_recs = norm_features_recs
@@ -176,11 +176,7 @@ class RndAnomalyGenerator:
         self.dst_ips = [(norm_features_recs.get_field_val_by_name(elem, 'dst_ip')) for elem in norm_features_stats]
 
         src_ports_range = [(norm_features_recs.get_field_val_by_name(elem, 'src_port')) for elem in norm_features_stats]
-        #self.src_ports = {'avg': avg(src_ports_range), 'min': min(src_ports_range), 'max': max(src_ports_range)}
-
         dst_ports_range = [(norm_features_recs.get_field_val_by_name(elem, 'dst_port')) for elem in norm_features_stats]
-        #self.dst_ports = {'avg': avg(dst_ports_range), 'min': min(dst_ports_range), 'max': max(dst_ports_range)}
-
         self.ports_range = set([int(i) for i in (src_ports_range + dst_ports_range)])
         self.min_port = min(self.ports_range)
         self.max_port = max(self.ports_range)
@@ -192,30 +188,76 @@ class RndAnomalyGenerator:
                 field_column = [float(norm_features_recs.get_field_val_by_name(elem, field)) for elem in norm_features_stats]
                 self.stat_field_vals[field] = {'avg': avg(field_column), 'min': min(field_column), 'max': max(field_column), 'stdev': stdev(field_column)}
 
+    def create_ms_for_ditestamp(self):
+        ms1 = ''.join(str(randint(0, 9)) for i in range(6))
+        ms = ''
+        for i in range(6):
+            digit = randint(0, 9)
+            ms += str(digit)
+        return ms
+
+    def create_datestamp(self, datestamp):
+        #datestamp1 = datestamp
+        ms = self.create_ms_for_ditestamp()
+        #afc = randint(-300, 300)
+        datestamp += randint(-300, 300)
+        ds = f'{str(datestamp).partition(".")[0]}.{ms}'
+        return float(ds)
+
     def create_normal_record(self):
         temp_list = []
         for field in self.norm_features_recs.get_field_names():
             if field == 'first_pkt_time':
                 self.last_first_pkt_time += abs(rnd(self.diff_fst_pkt_time))
+                self.last_first_pkt_time = self.create_datestamp(self.last_first_pkt_time)# expand time as +- 5 mins
                 temp_list += [str(self.last_first_pkt_time)]
             elif field == 'last_pkt_time':
                 temp_list += [str(self.last_first_pkt_time + abs(rnd(self.pkt_dur)))]
             elif field == 'src_ip':
                 temp_ip = choice(self.src_ips)
-                new_ip = int(ip_address(temp_ip)) + randint(0, 5)
+                new_ip = int(ip_address(temp_ip)) + randint(-5, 5)
                 temp_list += [str(ip_address(new_ip))]
             elif field == 'dst_ip':
                 temp_ip = choice(self.dst_ips)
-                new_ip = int(ip_address(temp_ip)) + randint(0, 5)
+                new_ip = int(ip_address(temp_ip)) + randint(-5, 5)
                 temp_list += [str(ip_address(new_ip))]
             elif field == 'src_port' or field == 'dst_port':
                 port = choice(list(self.ports_range))
-                temp_list += [str(port + randint(0, 10))]
-                #temp_list += [str(randint(self.min_port, self.max_port))]
+                temp_list += [str(port + randint(-10, 10))]
             else:
                 temp_list += [str(int(rnd(self.stat_field_vals[field])))]
         return temp_list
 
+
+class RndAnomalyGenerator:
+    # statistical characteristics extraction
+    def __init__(self, norm_features_recs, norm_features_stats=None):
+        self.norm_features_recs = norm_features_recs
+
+        if norm_features_stats is None:
+            norm_features_stats = norm_features_recs.insert_packet_stats()
+
+        # for date in utc-format
+        self.last_first_pkt_time = float(
+            norm_features_recs.get_field_val_by_name(norm_features_stats[-1], 'first_pkt_time'))
+        fst_pkt_times = [float(norm_features_recs.get_field_val_by_name(elem, 'first_pkt_time')) for elem in
+                         norm_features_stats]
+        diff_fst_pkt_times = list(map(lambda x: abs(float(x[1]) - float(x[0])), zip(fst_pkt_times, fst_pkt_times[1:])))
+        durs = [float(norm_features_recs.get_field_val_by_name(elem, 'last_pkt_time')) - float(
+            norm_features_recs.get_field_val_by_name(elem, 'first_pkt_time'))
+                for elem in norm_features_stats]
+        self.diff_fst_pkt_time = {'avg': avg(diff_fst_pkt_times), 'min': min(diff_fst_pkt_times),
+                                  'max': max(diff_fst_pkt_times)}
+        self.pkt_dur = {'avg': avg(durs), 'min': min(durs), 'max': max(durs)}
+
+        # this block extracts column under current field and collects its statistical characteristics
+        self.stat_field_vals = {}
+        for field in self.norm_features_recs.get_field_names():
+            if field not in ['src_ip', 'dst_ip', 'src_port', 'dst_port', 'first_pkt_time', 'last_pkt_time']:
+                field_column = [float(norm_features_recs.get_field_val_by_name(elem, field)) for elem in
+                                norm_features_stats]
+                self.stat_field_vals[field] = {'avg': avg(field_column), 'min': min(field_column),
+                                               'max': max(field_column), 'stdev': stdev(field_column)}
 
     def create_abnormal_record(self):
         fields_for_rnd = [field for field in self.norm_features_recs.get_field_names() if 'Request' in field]
@@ -304,8 +346,8 @@ if __name__ == '__main__':
     print('file {} was written'.format(normal_csv_file))
 
     normal_generated_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal_generated.csv', json_file)
-    rag = RndAnomalyGenerator(features, features_list)
-    normals = [rag.create_normal_record() for _ in range(10)]
+    expanded = DatasetExpansion(features, features_list)
+    normals = [expanded.create_normal_record() for _ in range(10)]
     for line in normals:
         print(line)
     save_to_csv(normal_generated_csv_file, [field_names] + normals)
