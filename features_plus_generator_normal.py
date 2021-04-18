@@ -7,8 +7,8 @@ from math import sqrt
 from argparse import ArgumentParser
 from collections import OrderedDict
 from pprint import pprint
-from random import uniform, randint, shuffle, choice
-from ipaddress import ip_address, IPv6Address
+from random import uniform, randint, shuffle, choice, randrange
+from ipaddress import ip_address, IPv6Address, ip_network, IPv6Network, ip_interface
 import numpy as np
 from collections import Counter
 
@@ -157,6 +157,12 @@ def rnd(dict_num):
     return dict_num['avg'] + (uniform(0, dict_num['max'] - dict_num['avg'])
                               if randint(0, 1) == 0 else -uniform(0, dict_num['avg'] - dict_num['min']))
 
+def rnd_ip(ips):
+    temp_ip = choice(ips)
+    #new_ip = int(ip_address(temp_ip)) + randint(-100, 200)
+    new_ip = int(ip_address(temp_ip)) + randrange(-50, 50, 10)
+    return ip_address(new_ip)
+
 class DatasetExpansion:
     # statistical characteristics extraction
     def __init__(self, norm_features_recs, norm_features_stats=None):
@@ -238,10 +244,14 @@ class RndAnomalyGenerator:
                                   'max': max(diff_fst_pkt_times)}
         self.pkt_dur = {'avg': avg(durs), 'min': min(durs), 'max': max(durs)}
 
+        temp_ip_adresses = [(norm_features_recs.get_field_val_by_name(elem, 'src_ip')) for elem in norm_features_stats] +\
+            [(norm_features_recs.get_field_val_by_name(elem, 'dst_ip')) for elem in norm_features_stats]
+        self.ip_adresses = list(set(temp_ip_adresses))
+
         # this block extracts column under current field and collects its statistical characteristics
         self.stat_field_vals = {}
         for field in self.norm_features_recs.get_field_names():
-            if field not in ['src_ip', 'dst_ip', 'src_port', 'dst_port', 'first_pkt_time', 'last_pkt_time']:
+            if field not in ['src_ip', 'dst_ip', 'src_port', 'dst_port', 'first_pkt_time', 'last_pkt_time', 'class']:
                 field_column = [float(norm_features_recs.get_field_val_by_name(elem, field)) for elem in
                                 norm_features_stats]
                 self.stat_field_vals[field] = {'avg': avg(field_column), 'min': min(field_column),
@@ -260,11 +270,15 @@ class RndAnomalyGenerator:
             elif field == 'last_pkt_time':
                 temp_list += [str(self.last_first_pkt_time + abs(rnd(self.pkt_dur)))]
             elif field == 'src_ip' or field == 'dst_ip':
-                temp_list += [str(ip_address(42540766411282592856903984951653826561))] # ivp6 = 2001:db8::1
+                #temp_list += [str(ip_address(42540766411282592856903984951653826561))] # ivp6 = 2001:db8::1
                 # temp_list += [str(IPv6Address(randint(0, 2 ** 128 - 1)))] #random ipv6
                 # temp_list += [str(ip_address(randint(0, 2 ** 32 - 1)))] # random ipv4
+                ip = rnd_ip(self.ip_adresses) #if randint(0, 1) == 0 else ip_address(randint(0, 2 ** 32 - 1)) #choice rnd ip from two original networks or rnd IPv4
+                temp_list += [str(ip)]
             elif field == 'src_port' or field == 'dst_port':
                 temp_list += [str(randint(0, 2 ** 16 - 1))]
+            elif field == 'class':
+                temp_list += ['abnormal']
             elif 'Request' in field:
                 if bin_lst[fields_for_rnd.index(field)] == 1:  # insert anomaly value
                     temp_list += [str(
@@ -336,8 +350,6 @@ if __name__ == '__main__':
     normal_generated_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal_generated.csv', json_file)
     exp_generator = DatasetExpansion(features, features_list)
     generated_normals_list = [exp_generator.create_normal_record() for _ in range(10)] # 10 - lines to create num
-    for line in generated_normals_list:
-        print(line)
     save_to_csv(normal_generated_csv_file, [field_names] + generated_normals_list)
 
     merged_normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_merged.csv', json_file)
@@ -345,12 +357,12 @@ if __name__ == '__main__':
     shuffle(merged_list)
     save_to_csv(merged_normal_csv_file, [field_names] + merged_list)
 
-'''
+
     anomaly_csv_file = re.sub(r'^(.+)\.json$', r'\1_anomalies.csv', json_file)
     if n_anomalies is not None:
         rag = RndAnomalyGenerator(features, features_list)
         anomalies = [rag.create_abnormal_record() for _ in range(n_anomalies)]
         save_to_csv(anomaly_csv_file, [field_names] + anomalies)
     print('file {} was written'.format(anomaly_csv_file))
-'''
+
 
