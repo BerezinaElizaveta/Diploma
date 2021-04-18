@@ -88,6 +88,7 @@ class FeaturesExtracting:
         for elem in PFCP_ELEMS.values():
             for proc in elem['procs'].values():
                 self.field_names += ['{}:{}'.format(elem['name'], proc)]
+        self.field_names += ['class']
 
     def create_keys(self, parsed_packet):
         if parsed_packet.ip_src < parsed_packet.ip_dst:
@@ -128,7 +129,10 @@ class FeaturesExtracting:
                     for proc_code in PFCP_ELEMS[elem_code]['procs'].keys():
                         line += [str(len(list(filter(lambda x: x.cmd_type == '{}:{}'.format(elem_code, proc_code), packet_stats))))]
 
+                line += ['normal']
+
                 temp_dict += [line]
+
         return temp_dict
 
     def get_field_names(self):
@@ -142,8 +146,6 @@ class FeaturesExtracting:
             print("field with name '" + name + "' was not found")
         assert(field_pos is not None)
         return fields[field_pos]
-
-# start of the anomaly generating block
 
 def avg(list_num):
     return sum(list(map(lambda x: float(x), list_num))) / len(list_num)
@@ -163,13 +165,9 @@ class DatasetExpansion:
         if norm_features_stats is None:
             norm_features_stats = norm_features_recs.insert_packet_stats()
 
-        # for date in utc-format
-        #last_first_pkt_time = float(norm_features_recs.get_field_val_by_name(norm_features_stats[-1], 'first_pkt_time'))
         fst_pkt_times = [float(norm_features_recs.get_field_val_by_name(elem, 'first_pkt_time')) for elem in norm_features_stats]
-        #diff_fst_pkt_times = list(map(lambda x: abs(float(x[1]) - float(x[0])), zip(fst_pkt_times, fst_pkt_times[1:])))
         durs = [float(norm_features_recs.get_field_val_by_name(elem, 'last_pkt_time')) - float(norm_features_recs.get_field_val_by_name(elem, 'first_pkt_time'))
                 for elem in norm_features_stats]
-        #self.diff_fst_pkt_time = {'avg': avg(diff_fst_pkt_times), 'min': min(diff_fst_pkt_times), 'max': max(diff_fst_pkt_times)}
         self.pkt_dur = {'avg': avg(durs), 'min': min(durs), 'max': max(durs)}
         self.first_time = min(fst_pkt_times)
         self.last_time = max(fst_pkt_times) + 300
@@ -186,7 +184,7 @@ class DatasetExpansion:
         # this block extracts column under current field and collects its statistical characteristics
         self.stat_field_vals = {}
         for field in self.norm_features_recs.get_field_names():
-            if field not in ['src_ip', 'dst_ip', 'src_port', 'dst_port', 'first_pkt_time', 'last_pkt_time']:
+            if field not in ['src_ip', 'dst_ip', 'src_port', 'dst_port', 'first_pkt_time', 'last_pkt_time', 'class']:
                 field_column = [float(norm_features_recs.get_field_val_by_name(elem, field)) for elem in norm_features_stats]
                 self.stat_field_vals[field] = {'avg': avg(field_column), 'min': min(field_column), 'max': max(field_column), 'stdev': stdev(field_column)}
 
@@ -195,7 +193,7 @@ class DatasetExpansion:
         first_pkt_time = 0.0
         for field in self.norm_features_recs.get_field_names():
             if field == 'first_pkt_time':
-                ms = ''.join(str(randint(0, 9)) for i in range(6))
+                ms = ''.join(str(randint(0, 9)) for _ in range(6))
                 datestamp = uniform(self.first_time, self.last_time)
                 first_pkt_time = float(f'{str(datestamp).partition(".")[0]}.{ms}')
                 temp_list += [str(datestamp)]
@@ -212,10 +210,18 @@ class DatasetExpansion:
             elif field == 'src_port' or field == 'dst_port':
                 port = choice(list(self.ports_range))
                 temp_list += [str(port + randint(-10, 10))]
+            elif field == 'class':
+                temp_list += ['normal']
             else:
                 temp_list += [str(int(rnd(self.stat_field_vals[field])))]
         return temp_list
 
+    def delete_dublicates(self, list1, list2):
+        merged_list = list1 + list2
+        list_without_dublicates = set(merged_list)
+        return list(list_without_dublicates)
+
+# start of the anomaly generating block
 
 class RndAnomalyGenerator:
     # statistical characteristics extraction
