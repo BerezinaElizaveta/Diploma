@@ -188,18 +188,8 @@ class DatasetExpansion:
                 field_column = [float(norm_features_recs.get_field_val_by_name(elem, field)) for elem in norm_features_stats]
                 self.stat_field_vals[field] = {'avg': avg(field_column), 'min': min(field_column), 'max': max(field_column), 'stdev': stdev(field_column)}
 
-    def create_ms_for_ditestamp(self):
-        ms1 = ''.join(str(randint(0, 9)) for i in range(6))
-        ms = ''
-        for i in range(6):
-            digit = randint(0, 9)
-            ms += str(digit)
-        return ms
-
     def create_datestamp(self, datestamp):
-        #datestamp1 = datestamp
-        ms = self.create_ms_for_ditestamp()
-        #afc = randint(-300, 300)
+        ms = ''.join(str(randint(0, 9)) for i in range(6))
         datestamp += randint(-300, 300)
         ds = f'{str(datestamp).partition(".")[0]}.{ms}'
         return float(ds)
