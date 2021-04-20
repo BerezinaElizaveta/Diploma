@@ -129,7 +129,7 @@ class FeaturesExtracting:
                     for proc_code in PFCP_ELEMS[elem_code]['procs'].keys():
                         line += [str(len(list(filter(lambda x: x.cmd_type == '{}:{}'.format(elem_code, proc_code), packet_stats))))]
 
-                line += ['normal']
+                line += ['0'] # type of traffic, 0 for normal, 1 for abnormal
 
                 temp_dict += [line]
 
@@ -217,7 +217,7 @@ class DatasetExpansion:
                 port = choice(list(self.ports_range))
                 temp_list += [str(port + randint(-10, 10))]
             elif field == 'class':
-                temp_list += ['normal']
+                temp_list += ['0'] # type of traffic, 0 for normal, 1 for abnormal
             else:
                 temp_list += [str(int(rnd(self.stat_field_vals[field])))]
         return temp_list
@@ -273,12 +273,12 @@ class RndAnomalyGenerator:
                 #temp_list += [str(ip_address(42540766411282592856903984951653826561))] # ivp6 = 2001:db8::1
                 # temp_list += [str(IPv6Address(randint(0, 2 ** 128 - 1)))] #random ipv6
                 # temp_list += [str(ip_address(randint(0, 2 ** 32 - 1)))] # random ipv4
-                ip = rnd_ip(self.ip_adresses) #if randint(0, 1) == 0 else ip_address(randint(0, 2 ** 32 - 1)) #choice rnd ip from two original networks or rnd IPv4
+                ip = rnd_ip(self.ip_adresses) if randint(0, 1) == 0 else ip_address(randint(0, 2 ** 32 - 1)) #choice rnd ip from two original networks or rnd IPv4
                 temp_list += [str(ip)]
             elif field == 'src_port' or field == 'dst_port':
                 temp_list += [str(randint(0, 2 ** 16 - 1))]
             elif field == 'class':
-                temp_list += ['abnormal']
+                temp_list += ['1'] # type of traffic, 0 for normal, 1 for abnormal
             elif 'Request' in field:
                 if bin_lst[fields_for_rnd.index(field)] == 1:  # insert anomaly value
                     temp_list += [str(
@@ -339,7 +339,7 @@ if __name__ == '__main__':
         for port_pair in features.features_dict[ip_pair].keys():
             print('len(tcp_records[{}][{}]): {}'.format(ip_pair, port_pair, len(features.features_dict[ip_pair][port_pair])))
 
-    n_anomalies = 5
+    n_anomalies = 100
 
     normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal.csv', json_file)
     field_names = features.get_field_names()
@@ -349,7 +349,7 @@ if __name__ == '__main__':
 
     normal_generated_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal_generated.csv', json_file)
     exp_generator = DatasetExpansion(features, features_list)
-    generated_normals_list = [exp_generator.create_normal_record() for _ in range(10)] # 10 - lines to create num
+    generated_normals_list = [exp_generator.create_normal_record() for _ in range(150)] # 10 - lines to create num
     save_to_csv(normal_generated_csv_file, [field_names] + generated_normals_list)
 
     merged_normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_merged.csv', json_file)
@@ -365,4 +365,16 @@ if __name__ == '__main__':
         save_to_csv(anomaly_csv_file, [field_names] + anomalies)
     print('file {} was written'.format(anomaly_csv_file))
 
+    # united dataset creator
+    the_df = merged_list + anomalies
+    shuffle(the_df)
+    save_to_csv('the_big_df.csv', [field_names] + the_df)
+
+    # dataset splitter
+    df_len = len(the_df)
+    train_len = round(df_len / 100 * 70) # на обучающий датасет выделяем 70% большого датасета
+    train_df = the_df[:train_len]
+    test_df = the_df[train_len:]
+    save_to_csv('train.csv', [field_names] + train_df)
+    save_to_csv('test.csv', [field_names] + test_df)
 
