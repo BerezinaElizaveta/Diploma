@@ -339,7 +339,7 @@ if __name__ == '__main__':
         for port_pair in features.features_dict[ip_pair].keys():
             print('len(tcp_records[{}][{}]): {}'.format(ip_pair, port_pair, len(features.features_dict[ip_pair][port_pair])))
 
-    n_anomalies = 100
+    n_anomalies = 493
 
     normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal.csv', json_file)
     field_names = features.get_field_names()
@@ -349,13 +349,18 @@ if __name__ == '__main__':
 
     normal_generated_csv_file = re.sub(r'^(.+)\.json$', r'\1_normal_generated.csv', json_file)
     exp_generator = DatasetExpansion(features, features_list)
-    generated_normals_list = [exp_generator.create_normal_record() for _ in range(150)] # 10 - lines to create num
+    generated_normals_list = [exp_generator.create_normal_record() for _ in range(500)] # (x) - lines to create num
+    print('normal records was generated')
     save_to_csv(normal_generated_csv_file, [field_names] + generated_normals_list)
+    print('file {} was written'.format(normal_generated_csv_file))
 
-    merged_normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_merged.csv', json_file)
+    #merged_normal_csv_file = re.sub(r'^(.+)\.json$', r'\1_normals_merged.csv', json_file)
     merged_list = features_list + generated_normals_list
+    print('merged normal origin and normal generated dataset was created')
     shuffle(merged_list)
-    save_to_csv(merged_normal_csv_file, [field_names] + merged_list)
+    print('merged normal dataset was shuffled')
+    #save_to_csv(merged_normal_csv_file, [field_names] + merged_list)
+    #print('file {} was written'.format(merged_normal_csv_file))
 
 
     anomaly_csv_file = re.sub(r'^(.+)\.json$', r'\1_anomalies.csv', json_file)
@@ -363,13 +368,17 @@ if __name__ == '__main__':
         rag = RndAnomalyGenerator(features, features_list)
         anomalies = [rag.create_abnormal_record() for _ in range(n_anomalies)]
         save_to_csv(anomaly_csv_file, [field_names] + anomalies)
+    print('{} anomalies based on "Requests" feature was generated'.format(n_anomalies))
     print('file {} was written'.format(anomaly_csv_file))
 
     # united dataset creator
     the_df = merged_list + anomalies
+    print('merged normal and abnormal records dataset was created')
     shuffle(the_df)
+    print('merged dataset was shuffled')
     save_to_csv('the_big_df.csv', [field_names] + the_df)
 
+'''
     # dataset splitter
     df_len = len(the_df)
     train_len = round(df_len / 100 * 70) # на обучающий датасет выделяем 70% большого датасета
@@ -377,4 +386,4 @@ if __name__ == '__main__':
     test_df = the_df[train_len:]
     save_to_csv('train.csv', [field_names] + train_df)
     save_to_csv('test.csv', [field_names] + test_df)
-
+'''
